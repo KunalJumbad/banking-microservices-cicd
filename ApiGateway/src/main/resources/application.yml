@@ -1,0 +1,41 @@
+spring:
+  application:
+    name: ApiGateway
+  cloud:
+    gateway:
+      globalcors:
+        corsConfigurations:
+          '[/**]':
+            allowedOrigins: "*"
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - OPTIONS
+            allowedHeaders: "*"
+      server:
+        webflux:
+          routes:
+            - id: authentication-service
+              uri: lb://AuthenticationService
+              predicates:
+                - Path=/auth/**
+            - id: customer-service
+              uri: lb://CustomerService
+              predicates:
+                - Path=/api/v1/customers,/api/v1/customers/**
+            - id: account-service
+              uri: lb://AccountService
+              predicates:
+                - Path=/api/v1/savings,/api/v1/savings/**
+
+server:
+  port: 8765
+
+eureka:
+  client:
+    register-with-eureka: true
+    fetch-registry: true
+    service-url:
+      defaultZone: ${EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE:http://localhost:8761/eureka/}

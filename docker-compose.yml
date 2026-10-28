@@ -1,0 +1,147 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: banking-mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: csb
+    expose:
+      - "3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - banking-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  discovery-service:
+    image: banking-discovery-service:latest
+    build:
+      context: ./DiscoveryService
+      dockerfile: Dockerfile
+    container_name: banking-discovery-service
+    ports:
+      - "8761:8761"
+    networks:
+      - banking-network
+    restart: on-failure
+
+  authentication-service:
+    image: banking-authentication-service:latest
+    build:
+      context: ./AuthenticationService
+      dockerfile: Dockerfile
+    container_name: banking-authentication-service
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/csb?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: root
+      EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE: http://discovery-service:8761/eureka/
+    ports:
+      - "9898:9898"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      discovery-service:
+        condition: service_started
+    networks:
+      - banking-network
+    restart: on-failure
+
+  customer-service:
+    image: banking-customer-service:latest
+    build:
+      context: ./CustomerService
+      dockerfile: Dockerfile
+    container_name: banking-customer-service
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/csb?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: root
+      EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE: http://discovery-service:8761/eureka/
+    ports:
+      - "8081:8081"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      discovery-service:
+        condition: service_started
+    networks:
+      - banking-network
+    restart: on-failure
+
+  account-service:
+    image: banking-account-service:latest
+    build:
+      context: ./AccountService
+      dockerfile: Dockerfile
+    container_name: banking-account-service
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/csb?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: root
+      EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE: http://discovery-service:8761/eureka/
+    ports:
+      - "8082:8082"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      discovery-service:
+        condition: service_started
+    networks:
+      - banking-network
+    restart: on-failure
+
+  account-service-2:
+    image: banking-account-service-2:latest
+    build:
+      context: ./AccountService2
+      dockerfile: Dockerfile
+    container_name: banking-account-service-2
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/csb?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: root
+      EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE: http://discovery-service:8761/eureka/
+    ports:
+      - "8083:8083"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      discovery-service:
+        condition: service_started
+    networks:
+      - banking-network
+    restart: on-failure
+
+  api-gateway:
+    image: banking-api-gateway:latest
+    build:
+      context: ./ApiGateway
+      dockerfile: Dockerfile
+    container_name: banking-api-gateway
+    environment:
+      EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE: http://discovery-service:8761/eureka/
+    ports:
+      - "8765:8765"
+    depends_on:
+      - discovery-service
+      - authentication-service
+      - customer-service
+      - account-service
+      - account-service-2
+    networks:
+      - banking-network
+    restart: on-failure
+
+volumes:
+  mysql_data:
+    driver: local
+
+networks:
+  banking-network:
+    driver: bridge
