@@ -1,4 +1,3 @@
-
 pipeline {
     agent any
 
@@ -8,8 +7,10 @@ pipeline {
     }
 
     environment {
+        JAVA_HOME = 'C:\\Program Files\\Java\\jdk-21.0.12.1'
         DOCKER_BIN = 'C:\\Users\\kunal\\AppData\\Local\\Programs\\DockerDesktop\\resources\\bin\\docker.exe'
         KUBECTL_BIN = 'C:\\Users\\kunal\\AppData\\Local\\Programs\\DockerDesktop\\resources\\bin\\kubectl.exe'
+        KUBECONFIG = 'C:\\ProgramData\\Jenkins\\.jenkins\\.kube\\config'
 
         DISCOVERY_IMAGE = 'banking-discovery-service:latest'
         GATEWAY_IMAGE = 'banking-api-gateway:latest'
@@ -19,87 +20,80 @@ pipeline {
     }
 
     stages {
-        stage('1 - Verify Tools and Cluster') {
+        stage('1. Checkout') {
             steps {
-                bat '"%DOCKER_BIN%" version'
-                bat '"%KUBECTL_BIN%" config current-context'
-                bat '"%KUBECTL_BIN%" cluster-info'
+                checkout scm
             }
         }
 
-        stage('2 - Build DiscoveryService') {
+        stage('2. Build JARs') {
             steps {
                 dir('DiscoveryService') {
-                    bat 'mvnw.cmd clean package -DskipTests'
+                    bat 'set "JAVA_HOME=%JAVA_HOME%" && set "PATH=%JAVA_HOME%\\bin;%PATH%" && mvnw.cmd clean package -DskipTests'
                 }
-                bat '"%DOCKER_BIN%" build -t "%DISCOVERY_IMAGE%" DiscoveryService'
-            }
-        }
-
-        stage('3 - Build ApiGateway') {
-            steps {
                 dir('ApiGateway') {
-                    bat 'mvnw.cmd clean package -DskipTests'
+                    bat 'set "JAVA_HOME=%JAVA_HOME%" && set "PATH=%JAVA_HOME%\\bin;%PATH%" && mvnw.cmd clean package -DskipTests'
                 }
-                bat '"%DOCKER_BIN%" build -t "%GATEWAY_IMAGE%" ApiGateway'
-            }
-        }
-
-        stage('4 - Build AuthenticationService') {
-            steps {
                 dir('AuthenticationService') {
-                    bat 'mvnw.cmd clean package -DskipTests'
+                    bat 'set "JAVA_HOME=%JAVA_HOME%" && set "PATH=%JAVA_HOME%\\bin;%PATH%" && mvnw.cmd clean package -DskipTests'
                 }
-                bat '"%DOCKER_BIN%" build -t "%AUTH_IMAGE%" AuthenticationService'
-            }
-        }
-
-        stage('5 - Build AccountService') {
-            steps {
                 dir('AccountService') {
-                    bat 'mvnw.cmd clean package -DskipTests'
+                    bat 'set "JAVA_HOME=%JAVA_HOME%" && set "PATH=%JAVA_HOME%\\bin;%PATH%" && mvnw.cmd clean package -DskipTests'
                 }
-                bat '"%DOCKER_BIN%" build -t "%ACCOUNT_IMAGE%" AccountService'
-            }
-        }
-
-        stage('6 - Build CustomerService') {
-            steps {
                 dir('CustomerService') {
-                    bat 'mvnw.cmd clean package -DskipTests'
+                    bat 'set "JAVA_HOME=%JAVA_HOME%" && set "PATH=%JAVA_HOME%\\bin;%PATH%" && mvnw.cmd clean package -DskipTests'
                 }
-                bat '"%DOCKER_BIN%" build -t "%CUSTOMER_IMAGE%" CustomerService'
             }
         }
 
-        stage('7 - Deploy MySQL Configuration') {
+        stage('3. Build Images') {
+            steps {
+                bat '"%DOCKER_BIN%" build -t %DISCOVERY_IMAGE% DiscoveryService'
+                bat '"%DOCKER_BIN%" build -t %GATEWAY_IMAGE% ApiGateway'
+                bat '"%DOCKER_BIN%" build -t %AUTH_IMAGE% AuthenticationService'
+                bat '"%DOCKER_BIN%" build -t %ACCOUNT_IMAGE% AccountService'
+                bat '"%DOCKER_BIN%" build -t %CUSTOMER_IMAGE% CustomerService'
+                bat '"%DOCKER_BIN%" images "banking-*"'
+            }
+        }
+
+        stage('4. Deploy Stack') {
             steps {
                 bat '"%KUBECTL_BIN%" apply -f k8s/01-mysql.yaml'
                 bat '"%KUBECTL_BIN%" rollout status deployment/mysql --timeout=180s'
-            }
-        }
 
-        stage('8 - Deploy DiscoveryService') {
-            steps {
                 bat '"%KUBECTL_BIN%" apply -f k8s/02-discovery.yaml'
                 bat '"%KUBECTL_BIN%" rollout status deployment/discovery-service --timeout=180s'
-            }
-        }
 
-        stage('9 - Deploy Backend Services') {
-            steps {
-                bat '"%KUBECTL_BIN%" apply -f k8s/03-backend-services.yaml'
-                bat '"%KUBECTL_BIN%" rollout status deployment/authentication-service --timeout=180s'
-                bat '"%KUBECTL_BIN%" rollout status deployment/account-service --timeout=180s'
-                bat '"%KUBECTL_BIN%" rollout status deployment/customer-service --timeout=180s'
+                bat '"%KUBECTL_BIN%" apply -f k8s/03-api-gateway.yaml'
                 bat '"%KUBECTL_BIN%" rollout status deployment/api-gateway --timeout=180s'
+
+                bat '"%KUBECTL_BIN%" apply -f k8s/04-authentication-service.yaml'
+                bat '"%KUBECTL_BIN%" rollout status deployment/authentication-service --timeout=180s'
+
+                bat '"%KUBECTL_BIN%" apply -f k8s/05-account-service.yaml'
+                bat '"%KUBECTL_BIN%" rollout status deployment/account-service --timeout=180s'
+
+                bat '"%KUBECTL_BIN%" apply -f k8s/06-customer-service.yaml'
+                bat '"%KUBECTL_BIN%" rollout status deployment/customer-service --timeout=180s'
+
+                bat '"%KUBECTL_BIN%" get deployments,services,pods'
             }
         }
 
-        stage('10 - Verify Deployments') {
+        stage('Post Actions') {
             steps {
-                bat '"%KUBECTL_BIN%" get deployments,services,pods'
-                bat '"%DOCKER_BIN%" images'
+                echo '============================================================='
+                echo 'MAIN PIPELINE PASSED: Microservices Deployed Successfully!'
+                echo '============================================================='
+                echo 'Eureka Service Registry: http://localhost:8761'
+                echo 'API Gateway: http://localhost:8765'
+                echo 'Auth Service: http://localhost:9898'
+                echo 'Customer Service: http://localhost:8081'
+                echo 'Account Service: http://localhost:8082'
+                echo 'Frontend Portal: http://localhost:3000'
+                echo 'Jenkins (Safe & Active): http://localhost:8080'
+                echo '============================================================='
             }
         }
     }

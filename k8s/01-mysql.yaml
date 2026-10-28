@@ -14,6 +14,7 @@ data:
   SPRING_DATASOURCE_URL: "jdbc:mysql://mysql:3306/csb?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true"
   SPRING_DATASOURCE_USERNAME: "root"
   EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE: "http://discovery-service:8761/eureka/"
+  EUREKA_INSTANCE_PREFER_IP_ADDRESS: "true"
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -32,6 +33,8 @@ metadata:
   name: mysql
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: mysql
@@ -53,6 +56,12 @@ spec:
               value: csb
           ports:
             - containerPort: 3306
+          readinessProbe:
+            exec:
+              command: ["mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot"]
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
           volumeMounts:
             - name: mysql-storage
               mountPath: /var/lib/mysql
