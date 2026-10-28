@@ -77,6 +77,9 @@ pipeline {
                 bat '"%KUBECTL_BIN%" apply -f k8s/06-customer-service.yaml'
                 bat '"%KUBECTL_BIN%" rollout status deployment/customer-service --timeout=180s'
 
+                bat '"%KUBECTL_BIN%" apply -f k8s/04-frontend.yaml'
+                bat '"%KUBECTL_BIN%" rollout status deployment/banking-frontend --timeout=180s'
+
                 bat '"%KUBECTL_BIN%" get deployments,services,pods'
             }
         }
