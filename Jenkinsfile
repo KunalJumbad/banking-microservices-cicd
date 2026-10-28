@@ -8,6 +8,9 @@ pipeline {
     }
 
     environment {
+        DOCKER_BIN = 'C:\\Users\\kunal\\AppData\\Local\\Programs\\DockerDesktop\\resources\\bin\\docker.exe'
+        KUBECTL_BIN = 'C:\\Users\\kunal\\AppData\\Local\\Programs\\DockerDesktop\\resources\\bin\\kubectl.exe'
+
         DISCOVERY_IMAGE = 'banking-discovery-service:latest'
         GATEWAY_IMAGE = 'banking-api-gateway:latest'
         AUTH_IMAGE = 'banking-authentication-service:latest'
@@ -16,89 +19,94 @@ pipeline {
     }
 
     stages {
-        stage('Checkout and Verify Tools') {
+        stage('1 - Verify Tools and Cluster') {
             steps {
-                checkout scm
-                bat 'git --version'
-                bat 'docker version'
-                bat 'kubectl config current-context'
-                bat 'kubectl cluster-info'
+                bat '"%DOCKER_BIN%" version'
+                bat '"%KUBECTL_BIN%" config current-context'
+                bat '"%KUBECTL_BIN%" cluster-info'
             }
         }
 
-        stage('1 - Build DiscoveryService') {
+        stage('2 - Build DiscoveryService') {
             steps {
                 dir('DiscoveryService') {
                     bat 'mvnw.cmd clean package -DskipTests'
                 }
-                bat 'docker build -t banking-discovery-service:latest DiscoveryService'
+                bat '"%DOCKER_BIN%" build -t "%DISCOVERY_IMAGE%" DiscoveryService'
             }
         }
 
-        stage('2 - Build ApiGateway') {
+        stage('3 - Build ApiGateway') {
             steps {
                 dir('ApiGateway') {
                     bat 'mvnw.cmd clean package -DskipTests'
                 }
-                bat 'docker build -t banking-api-gateway:latest ApiGateway'
+                bat '"%DOCKER_BIN%" build -t "%GATEWAY_IMAGE%" ApiGateway'
             }
         }
 
-        stage('3 - Build AuthenticationService') {
+        stage('4 - Build AuthenticationService') {
             steps {
                 dir('AuthenticationService') {
                     bat 'mvnw.cmd clean package -DskipTests'
                 }
-                bat 'docker build -t banking-authentication-service:latest AuthenticationService'
+                bat '"%DOCKER_BIN%" build -t "%AUTH_IMAGE%" AuthenticationService'
             }
         }
 
-        stage('4 - Build AccountService') {
+        stage('5 - Build AccountService') {
             steps {
                 dir('AccountService') {
                     bat 'mvnw.cmd clean package -DskipTests'
                 }
-                bat 'docker build -t banking-account-service:latest AccountService'
+                bat '"%DOCKER_BIN%" build -t "%ACCOUNT_IMAGE%" AccountService'
             }
         }
 
-        stage('5 - Build CustomerService') {
+        stage('6 - Build CustomerService') {
             steps {
                 dir('CustomerService') {
                     bat 'mvnw.cmd clean package -DskipTests'
                 }
-                bat 'docker build -t banking-customer-service:latest CustomerService'
+                bat '"%DOCKER_BIN%" build -t "%CUSTOMER_IMAGE%" CustomerService'
             }
         }
 
-        stage('Deploy MySQL Configuration') {
+        stage('7 - Deploy MySQL Configuration') {
             steps {
-                bat 'kubectl apply -f k8s/01-mysql.yaml'
-                bat 'kubectl rollout status deployment/mysql --timeout=180s'
+                bat '"%KUBECTL_BIN%" apply -f k8s/01-mysql.yaml'
+                bat '"%KUBECTL_BIN%" rollout status deployment/mysql --timeout=180s'
             }
         }
 
-        stage('Deploy DiscoveryService') {
+        stage('8 - Deploy DiscoveryService') {
             steps {
-                bat 'kubectl apply -f k8s/02-discovery.yaml'
-                bat 'kubectl rollout status deployment/discovery-service --timeout=180s'
+                bat '"%KUBECTL_BIN%" apply -f k8s/02-discovery.yaml'
+                bat '"%KUBECTL_BIN%" rollout status deployment/discovery-service --timeout=180s'
             }
         }
 
-        stage('Deploy Backend Services') {
+        stage('9 - Deploy Backend Services') {
             steps {
-                bat 'kubectl apply -f k8s/03-backend-services.yaml'
-                bat 'kubectl rollout status deployment/authentication-service --timeout=180s'
-                bat 'kubectl rollout status deployment/customer-service --timeout=180s'
-                bat 'kubectl rollout status deployment/account-service --timeout=180s'
-                bat 'kubectl rollout status deployment/api-gateway --timeout=180s'
+                bat '"%KUBECTL_BIN%" apply -f k8s/03-backend-services.yaml'
+                bat '"%KUBECTL_BIN%" rollout status deployment/authentication-service --timeout=180s'
+                bat '"%KUBECTL_BIN%" rollout status deployment/account-service --timeout=180s'
+                bat '"%KUBECTL_BIN%" rollout status deployment/customer-service --timeout=180s'
+                bat '"%KUBECTL_BIN%" rollout status deployment/api-gateway --timeout=180s'
+            }
+        }
+
+        stage('10 - Verify Deployments') {
+            steps {
+                bat '"%KUBECTL_BIN%" get deployments,services,pods'
+                bat '"%DOCKER_BIN%" images'
             }
         }
     }
 
     post {
         success {
-            echo 'Build and deployment stages completed successfully.'
+            echo 'Pipeline completed successfully.'
         }
         failure {
             echo 'Pipeline failed. Check Console Output before retrying.'
